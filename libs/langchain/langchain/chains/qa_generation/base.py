@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
+
+from pydantic import Field
 
 from langchain.callbacks.manager import CallbackManagerForChainRun
 from langchain.chains.base import Chain
 from langchain.chains.llm import LLMChain
-from langchain.chains.qa_generation.prompt import PROMPT_SELECTOR
-from langchain.output_parsers.json import SimpleJsonOutputParser
-from langchain.pydantic_v1 import Field
-from langchain.schema import BaseOutputParser, BasePromptTemplate
+from langchain.chains.qa_generation.prompt import PARSER, PROMPT_SELECTOR
+from langchain.output_parsers import PydanticOutputParser
+from langchain.schema import BasePromptTemplate, OutputParserException
 from langchain.schema.language_model import BaseLanguageModel
 from langchain.text_splitter import RecursiveCharacterTextSplitter, TextSplitter
 
@@ -27,7 +27,7 @@ class QAGenerationChain(Chain):
     """Key of the input to the chain."""
     output_key: str = "questions"
     """Key of the output of the chain."""
-    k: Optional[int] = None
+    k: int = 1
     """Number of questions to generate."""
 
     @classmethod
@@ -35,7 +35,7 @@ class QAGenerationChain(Chain):
         cls,
         llm: BaseLanguageModel,
         prompt: Optional[BasePromptTemplate] = None,
-        output_parser: Optional[BaseOutputParser] = None,
+        output_parser: Optional[PydanticOutputParser] = None,
         **kwargs: Any,
     ) -> QAGenerationChain:
         """
@@ -51,7 +51,7 @@ class QAGenerationChain(Chain):
             a QAGenerationChain class
         """
         _prompt = prompt or PROMPT_SELECTOR.get_prompt(llm)
-        _output_parser = output_parser or SimpleJsonOutputParser()
+        _output_parser = output_parser or PARSER
         chain = LLMChain(llm=llm, prompt=_prompt, output_parser=_output_parser)
         return cls(llm_chain=chain, **kwargs)
 
@@ -74,7 +74,17 @@ class QAGenerationChain(Chain):
     ) -> Dict[str, List]:
         docs = self.text_splitter.create_documents([inputs[self.input_key]])
         results = self.llm_chain.generate(
-            [{"text": d.page_content} for d in docs], run_manager=run_manager
+            [{"text": d.page_content, "k": self.k} for d in docs],
+            run_manager=run_manager,
         )
-        qa = [json.loads(res[0].text) for res in results.generations]
+
+        def _gen() -> Iterable[str]:
+            for res in results.generations:
+                text = res[0].text
+                try:
+                    yield self.llm_chain.output_parser.parse(text)  # type: ignore
+                except OutputParserException as e:
+                    raise e
+
+        qa = list(_gen())
         return {self.output_key: qa}
