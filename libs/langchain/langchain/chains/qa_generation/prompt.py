@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List
 
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, field_validator, Field
 
 from langchain.chains.prompt_selector import ConditionalPromptSelector, is_chat_model
 from langchain.output_parsers import PydanticOutputParser
@@ -20,7 +20,7 @@ class QuestionAnswerPair(BaseModel):
     question: str = Field(..., description="The question that will be answered.")
     answer: str = Field(..., description="The answer to the question that was asked.")
 
-    @validator("question")
+    @field_validator("question")
     def validate_question(cls, v: str) -> str:
         if not v.endswith("?"):
             raise ValueError("Question must end with a question mark.")
