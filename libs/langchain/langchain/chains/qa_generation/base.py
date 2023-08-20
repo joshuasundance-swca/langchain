@@ -19,9 +19,7 @@ class QAGenerationChain(Chain):
 
     llm_chain: LLMChain
     """LLM Chain that generates responses from user input and context."""
-    text_splitter: TextSplitter = Field(
-        default=RecursiveCharacterTextSplitter(chunk_overlap=500)
-    )
+    text_splitter: TextSplitter = RecursiveCharacterTextSplitter(chunk_overlap=500)
     """Text splitter that splits the input into chunks."""
     input_key: str = "text"
     """Key of the input to the chain."""
